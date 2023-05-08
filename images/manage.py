@@ -1,6 +1,7 @@
 import os
 import shutil
 import tkinter
+from time import sleep
 
 from PIL import ImageTk, Image
 
@@ -11,6 +12,7 @@ print("started loading files")
 for dirpath, _, filenames in os.walk(file_path):
     for f in filenames:
         files.append(os.path.abspath(os.path.join(dirpath, f)))
+files = sorted(files, key=os.path.getsize, reverse=True)
 print("files loaded")
 
 
@@ -57,16 +59,19 @@ class Window:
 
     def show_file(self, f):
         self.img = Image.open(f)
-        self.img = self.img.resize((self.img.width, self.img.height), Image.ANTIALIAS)
+        x = self.img.height / 1080
+        self.img = self.img.resize((int(self.img.width / x), 1080), Image.LANCZOS)
 
         self.img = ImageTk.PhotoImage(self.img)
 
         self.label = tkinter.Label(self.master, image=self.img)
-        self.label.pack(expand=True, fill=tkinter.BOTH)
+        self.label.pack_propagate(0)
+        self.label.pack(side=tkinter.TOP, expand=True, fill=tkinter.X)
 
     def next(self, event):
         self.cur += 1
         self.show_file(self.files[self.cur])
+        sleep(0.1)
 
     def real(self, event):
         self.label.destroy()
