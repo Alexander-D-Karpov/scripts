@@ -4,7 +4,13 @@ import yaml
 
 from telethon import TelegramClient
 from telethon.tl import functions
-from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto, User
+from telethon.tl.types import (
+    MessageMediaDocument,
+    MessageMediaPhoto,
+    PeerChannel,
+    PeerUser,
+    PeerChat,
+)
 
 if os.getenv("api_id") is None:
     raise ValueError("please set api_id env variable")
@@ -101,25 +107,13 @@ async def progress_bar(
         print_progress_bar(item.id)
 
 
-async def download_channel(client, id):
-    id = str(id)
-    min_id = 0
+async def download(client, entity, title, min_id):
     max_id = 0
-    if id in offsets:
-        min_id = offsets[id]
-    entity = await client.get_entity(int(id))
-    t = type(entity)
-
-    if t is User:
-        title = entity.username
-    else:
-        title = entity.title
-
     async for message in client.iter_messages(entity):
         max_id = message.id
         break
 
-    if max_id == min_id:
+    if max_id <= min_id:
         print(" " * 4 + f"done {title}")
         return
     if not os.path.isdir(f"poller/{title}"):
@@ -151,7 +145,7 @@ async def download_channel(client, id):
                 else:
                     await message.download_media(file=f"poller/{title}/other/")
 
-        offsets[id] = message.id
+        offsets[entity.id] = message.id
 
         if message.id % 10 == 0:
             with open("poller/.offsets.json", "w") as f:
@@ -159,6 +153,45 @@ async def download_channel(client, id):
     print(" " * 4 + f"done {title}")
     with open("poller/.offsets.json", "w") as f:
         json.dump(offsets, f, indent=4)
+
+
+async def download_channel(client, id):
+    id = str(id)
+    min_id = 0
+    if id in offsets:
+        min_id = offsets[id]
+    try:
+        entity = await client.get_entity(PeerChannel(int(id)))
+    except ValueError:
+        print("channel not found, there is probably somthing broken...")
+        return
+    await download(client, entity, entity.title, min_id)
+
+
+async def download_user(client, id):
+    id = str(id)
+    min_id = 0
+    if id in offsets:
+        min_id = offsets[id]
+    try:
+        entity = await client.get_entity(PeerUser(int(id)))
+    except ValueError:
+        print("user not found, there is probably somthing broken...")
+        return
+    await download(client, entity, entity.username, min_id)
+
+
+async def download_chat(client, id):
+    id = str(id)
+    min_id = 0
+    if id in offsets:
+        min_id = offsets[id]
+    try:
+        entity = await client.get_entity(PeerChat(int(id)))
+    except ValueError:
+        print("chat not found, there is probably somthing broken...")
+        return
+    await download(client, entity, entity.title, min_id)
 
 
 async def run(client):
@@ -202,8 +235,13 @@ async def run(client):
             print(f"downloading folder: {folder}")
             for el in included_chats:
                 id = el["id"]
-                await download_channel(client, id)
+                if el["_"] == "InputPeerUser":
+                    await download_user(client, id)
+                elif el["_"] == "InputPeerChannel":
+                    await download_channel(client, id)
+                elif el["_"] == "InputPeerChat":
+                    await download_chat(client, id)
 
 
-with TelegramClient("anon", api_id, api_hash) as client:
+with TelegramClient("downloader", int(api_id), api_hash) as client:
     client.loop.run_until_complete(run(client))
