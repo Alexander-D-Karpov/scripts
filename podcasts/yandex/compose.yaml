@@ -1,0 +1,7 @@
+version: "3"
+
+services:
+  podcasts:
+    build: .
+    env_file:
+      - .env
