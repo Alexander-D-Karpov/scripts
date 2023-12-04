@@ -31,10 +31,16 @@ def structure_directory_content(input_dir, output_file=None, extensions=None):
                     file.endswith(f".{ext}") for ext in extensions
                 ):
                     file_path = os.path.join(root, file)
-                    outfile.write(f"# {os.path.relpath(file_path, input_dir)}\n")
-                    with open(file_path, "r") as infile:
-                        outfile.write(infile.read())
-                        outfile.write("\n\n")
+                    try:
+                        with open(file_path, "r") as infile:
+                            data = infile.read()
+                            outfile.write(
+                                f"# {os.path.relpath(file_path, input_dir)}\n"
+                            )
+                            outfile.write(data)
+                            outfile.write("\n\n")
+                    except UnicodeDecodeError:
+                        continue
 
 
 if __name__ == "__main__":
