@@ -1,5 +1,18 @@
 import os
 import sys
+import pathspec
+
+
+def read_gitignore(input_dir):
+    """
+    Reads the .gitignore file in the input directory and returns a pathspec object.
+    """
+    gitignore_path = os.path.join(input_dir, ".gitignore")
+    if os.path.isfile(gitignore_path):
+        with open(gitignore_path, "r") as gitignore_file:
+            return pathspec.PathSpec.from_lines("gitwildmatch", gitignore_file)
+    else:
+        return pathspec.PathSpec.from_lines("gitwildmatch", [])
 
 
 def structure_directory_content(input_dir, output_file=None, extensions=None):
@@ -12,20 +25,30 @@ def structure_directory_content(input_dir, output_file=None, extensions=None):
                         If None, 'data.txt' or 'data.<extension>' will be used.
     :param extensions: A list of file extensions to include. If None, all files are included.
     """
+    gitignore_spec = read_gitignore(input_dir)
+
     if extensions:
         extensions = [ext.strip() for ext in extensions.split(",") if ext.strip() != ""]
-        # If only one extension is given and no output file is specified, use 'data.<extension>'
         if not output_file and len(extensions) == 1:
             output_file = f"data.{extensions[0]}"
     else:
         extensions = None
 
-    # If no output file is specified, default to 'data.txt'
     if not output_file:
         output_file = "data.txt"
 
     with open(output_file, "w") as outfile:
         for root, dirs, files in os.walk(input_dir):
+            files = [
+                f
+                for f in files
+                if not gitignore_spec.match_file(os.path.join(root, str(f)))
+            ]
+            dirs[:] = [
+                d
+                for d in dirs
+                if not gitignore_spec.match_file(os.path.join(root, str(d)))
+            ]
             for file in files:
                 if extensions is None or any(
                     file.endswith(f".{ext}") for ext in extensions
