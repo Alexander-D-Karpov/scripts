@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from os import getenv
 
 from aiogram import Bot, Dispatcher, html, F
@@ -293,6 +294,8 @@ async def unsubscribe_callback(callback: CallbackQuery):
 
 @dp.message(Command("get_data"))
 async def get_data_handler(message: Message):
+    global subjects_data
+
     chat_id = str(message.chat.id)
     if chat_id not in subscribed_chats or not subscribed_chats[chat_id]:
         await message.answer(
@@ -302,6 +305,9 @@ async def get_data_handler(message: Message):
 
     limits_data = await get_itmo_limits()
     response = "Информация о выбранных вариантах:\n\n"
+
+    if not subjects_data:
+        subjects_data = await get_itmo_data()
 
     for item_id in subscribed_chats[chat_id]:
         item = next(
@@ -368,23 +374,38 @@ async def update_token_handler(message: Message) -> None:
     global ITMO_TOKEN
     ITMO_TOKEN = new_token
 
-    with open(".env", "r") as file:
-        lines = file.readlines()
-    with open(".env", "w") as file:
-        for line in lines:
-            if line.startswith("ITMO_TOKEN="):
-                file.write(f"ITMO_TOKEN={new_token}\n")
-            else:
-                file.write(line)
+    if not new_token:
+        await message.answer("Пожалуйста, укажите новый токен после команды.")
+        return
+
+    if os.path.exists(".env"):
+        with open(".env", "r") as file:
+            lines = file.readlines()
+        with open(".env", "w") as file:
+            for line in lines:
+                if line.startswith("ITMO_TOKEN="):
+                    file.write(f"ITMO_TOKEN={new_token}\n")
+                else:
+                    file.write(line)
 
     await message.answer("Токен успешно обновлен.")
 
 
 async def periodic_updates(bot: Bot):
+    global subjects_data
+
     while True:
         limits_data = await get_itmo_limits()
+        if not limits_data:
+            logging.error("Ошибка при получении лимитов")
+            await asyncio.sleep(300)
+            continue
         for chat_id, subscribed_items in subscribed_chats.items():
             response = "Обновленная информация о выбранных вариантах:\n\n"
+
+            if not subjects_data:
+                subjects_data = await get_itmo_data()
+
             for item_id in subscribed_items:
                 item = next(
                     (

@@ -1,10 +1,18 @@
-FROM python:3.9-slim
+ARG PYTHON_VERSION=3.11-slim
+FROM python:${PYTHON_VERSION} as python
 
+
+FROM python as python-build-stage
+
+ARG BUILD_ENVIRONMENT=local
+RUN mkdir "/app"
 WORKDIR /app
+ARG BUILD_ENVIRONMENT=local
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ADD requirements.txt requirements.txt
+ADD main.py main.py
+ADD subscribed_chats.json subscribed_chats.json
 
-COPY bot.py .
+RUN pip install -r requirements.txt
 
 CMD ["python", "main.py"]
