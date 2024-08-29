@@ -1,6 +1,7 @@
 .idea
 .env
 *.session
+subscribed_chats.json
 
 ### Python template
 # Byte-compiled / optimized / DLL files
