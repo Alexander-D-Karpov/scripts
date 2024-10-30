@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  stream:
+    build: .
+    environment:
+      - API_HOST=https://new.akarpov.ru
+      - WEB_HOST=https://next.akarpov.ru
+      - RTMP_URL=rtmp://your.rtmp.server/live/stream_key
+    volumes:
+      - /tmp:/tmp
+    restart: unless-stopped

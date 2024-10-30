@@ -1,0 +1,6 @@
+ffmpeg-python
+Pillow
+qrcode
+colorthief
+requests
+numpy
