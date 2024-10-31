@@ -6,7 +6,7 @@ services:
     environment:
       - API_HOST=https://new.akarpov.ru
       - WEB_HOST=https://next.akarpov.ru
-      - RTMP_URL=rtmp://your.rtmp.server/live/stream_key
+      - RTMP_URLS=rtmp://your.rtmp.server/live/stream_key
       - TELEGRAM_TOKEN=your_bot_token_here
       - ADMIN_IDS=123,321  # Comma-separated list of Telegram user IDs
     volumes:
