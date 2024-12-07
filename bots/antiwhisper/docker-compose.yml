@@ -1,0 +1,8 @@
+version: '3'
+services:
+  telegram-bot:
+    build: .
+    container_name: telegram_bot
+    restart: always
+    env_file:
+      - .env
