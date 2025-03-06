@@ -2,24 +2,38 @@ import os
 import sys
 import pathspec
 
-
 def read_gitignore(input_dir):
     """
     Reads the .gitignore file in the input directory and returns a pathspec object.
     """
+    # Default patterns to always ignore
+    default_patterns = [
+        "migrations/*.py",  # Ignore Django migration files
+        "node_modules/",    # Ignore node_modules directory
+    ]
+    
     gitignore_path = os.path.join(input_dir, ".gitignore")
     if os.path.isfile(gitignore_path):
         with open(gitignore_path, "r") as gitignore_file:
-            return pathspec.PathSpec.from_lines("gitwildmatch", gitignore_file)
+            patterns = default_patterns + list(gitignore_file)
+            return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
     else:
-        return pathspec.PathSpec.from_lines("gitwildmatch", [])
+        return pathspec.PathSpec.from_lines("gitwildmatch", default_patterns)
 
+def should_ignore_path(path, gitignore_spec):
+    """
+    Additional check for paths that should be ignored.
+    """
+    # Check if the path contains node_modules or migrations directory
+    if "node_modules" in path.split(os.sep) or \
+       ("migrations" in path.split(os.sep) and path.endswith(".py")):
+        return True
+    return gitignore_spec.match_file(path)
 
 def structure_directory_content(input_dir, output_file=None, extensions=None):
     """
     This function goes through the input directory recursively and structures
     all the file contents into one output file based on the given extensions.
-
     :param input_dir: The input directory to search for files.
     :param output_file: The output file where the content will be structured.
                         If None, 'data.txt' or 'data.<extension>' will be used.
@@ -39,16 +53,18 @@ def structure_directory_content(input_dir, output_file=None, extensions=None):
 
     with open(output_file, "w") as outfile:
         for root, dirs, files in os.walk(input_dir):
+            # Filter files and directories using the enhanced ignore check
             files = [
-                f
-                for f in files
-                if not gitignore_spec.match_file(os.path.join(root, str(f)))
+                f for f in files
+                if not should_ignore_path(os.path.join(root, str(f)), gitignore_spec)
             ]
+            
+            # Filter directories in-place
             dirs[:] = [
-                d
-                for d in dirs
-                if not gitignore_spec.match_file(os.path.join(root, str(d)))
+                d for d in dirs
+                if not should_ignore_path(os.path.join(root, str(d)), gitignore_spec)
             ]
+
             for file in files:
                 if extensions is None or any(
                     file.endswith(f".{ext}") for ext in extensions
@@ -64,7 +80,6 @@ def structure_directory_content(input_dir, output_file=None, extensions=None):
                             outfile.write("\n\n")
                     except UnicodeDecodeError:
                         continue
-
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
