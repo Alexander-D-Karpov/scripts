@@ -24,61 +24,78 @@ def download_file(file_url):
     return local_filename
 
 
-r = requests.get(url)
-if r.status_code != 200:
-    raise LookupError("Site not found")
-inner_data = r.text.splitlines()
-data = []
-for line in inner_data:
-    if "window.__INITIAL_STATE__" in line:
-        data.append(line)
+def get_data(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        raise LookupError("Site not found")
+    inner_data = r.text.splitlines()
+    data = []
+    for line in inner_data:
+        if "window.__INITIAL_STATE__" in line:
+            data.append(line)
 
-if len(data) != 1:
-    raise ValueError("Payload not found")
+    if len(data) != 1:
+        raise ValueError("Payload not found")
 
-d = json.loads(unquote(data[0].split('"')[1::2][0]))  # type: dict
+    d = json.loads(unquote(data[0].split('"')[1::2][0]))  # type: dict
+    return d
+
+
+d = get_data(url)
+while (
+    not d
+    or "ch" not in d
+    or "chInfo" not in d["ch"]
+    or "title" not in d["ch"]["chInfo"]
+):
+    d = get_data(url)
+    print("Data not loaded, retrying...")
 title = d["ch"]["chInfo"]["title"]
 main_image = d["ch"]["chInfo"]["cover_web"]
 author = d["ch"]["chInfo"]["author"]
+episode_count = d["ch"]["chInfo"]["episode_count"]
 print("Downloading podcast " + title)
 episodes = d["ch"]["eps"]
 if not os.path.isdir(title):
     os.mkdir(title)
 for i, episode in enumerate(episodes):
-    print(f"Downloading: {episode['title']}", end="\r")
-    if "url" in episode and episode["url"]:
-        ep_url = episode["url"]
-    else:
-        ep_url = episode["urls"][0]
-    orig_path = download_file(ep_url)
-    n_path = title + "/" + f"{title}.mp3"
-    AudioSegment.from_file(orig_path).export(n_path)
-    os.remove(orig_path)
-    if "cover_url" not in episode or not episode["cover_url"]:
-        img_path = download_file(main_image)
-    else:
-        img_path = download_file(episode["cover_url"])
-    if "author" in episode and episode["author"]:
-        ep_author = episode["author"]
-    else:
-        ep_author = author
+    n_path = title + "/" + f"{title}.mp3" # имя из ep
+    if not os.path.exists(n_path): # на 1 выключается
+        print(f"Downloading: {episode['title']}", end="\r")
+        if "url" in episode and episode["url"]:
+            ep_url = episode["url"]
+        else:
+            ep_url = episode["urls"][0]
+        orig_path = download_file(ep_url)
+        AudioSegment.from_file(orig_path).export(n_path)
+        os.remove(orig_path)
+        if "cover_url" not in episode or not episode["cover_url"]:
+            img_path = download_file(main_image)
+        else:
+            img_path = download_file(episode["cover_url"])
+        if "author" in episode and episode["author"]:
+            ep_author = episode["author"]
+        else:
+            ep_author = author
 
-    tag = MP3(n_path, ID3=ID3)
-    tag.tags.add(
-        APIC(
-            encoding=3,
-            mime="image/png",
-            type=3,
-            desc="Cover",
-            data=open(img_path, "rb").read(),
+        print(f"Processing: {episode['title']}", end="\r")
+        tag = MP3(n_path, ID3=ID3)
+        tag.tags.add(
+            APIC(
+                encoding=3,
+                mime="image/png",
+                type=3,
+                desc="Cover",
+                data=open(img_path, "rb").read(),
+            )
         )
-    )
-    tag.save()
-    tag = EasyID3(n_path)
+        tag.save()
+        tag = EasyID3(n_path)
 
-    tag["title"] = episode["title"]
-    tag["album"] = title
-    tag["artist"] = ep_author
+        tag["title"] = episode["title"]
+        tag["album"] = title
+        tag["tracknumber"] = f"{episode_count - i}/{episode_count}"
+        tag["artist"] = ep_author
 
-    tag.save()
-    os.remove(img_path)
+        tag.save()
+        os.remove(img_path)
