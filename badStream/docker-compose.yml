@@ -1,0 +1,7 @@
+services:
+  bad-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./cache:/app/ascii_frames_cache
