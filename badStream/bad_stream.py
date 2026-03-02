@@ -18,9 +18,9 @@ FRAME_DIR = "frames"
 CACHE_FILE = "ascii_frames_cache/ascii_frames.json"
 WIDTH = 50
 HEIGHT = 20
-FPS = 5
-DELAY = 0.2
-CHARS = " .,:;+*?%S#@"
+FPS = 2
+DELAY = 0.5
+CHARS = " .',:;clodxkO0KXNWM@"
 
 FRAMES = []
 active = {}
@@ -76,48 +76,80 @@ def precache_frames():
     return frames
 
 
-RATE_SEM = asyncio.Semaphore(25)
+RATE_SEM = asyncio.Semaphore(20)
 
 async def send_draft(session, chat_id, draft_id, text):
-    async with RATE_SEM:
-        async with session.post(f"{API}/sendMessageDraft", json={
-            "chat_id": chat_id,
-            "draft_id": draft_id,
-            "text": text,
-            "parse_mode": "HTML",
-        }) as resp:
-            return await resp.json()
+    for attempt in range(3):
+        try:
+            async with RATE_SEM:
+                async with session.post(f"{API}/sendMessageDraft", json={
+                    "chat_id": chat_id,
+                    "draft_id": draft_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                }, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    data = await resp.json()
+                    if resp.status == 429:
+                        retry_after = data.get("parameters", {}).get("retry_after", 1)
+                        print(f"[429] chat={chat_id} retry_after={retry_after}s attempt={attempt+1}")
+                        await asyncio.sleep(retry_after)
+                        continue
+                    if not data.get("ok"):
+                        print(f"[ERR] chat={chat_id} draft: {data}")
+                    return data
+        except asyncio.TimeoutError:
+            print(f"[TIMEOUT] chat={chat_id} draft attempt={attempt+1}")
+            await asyncio.sleep(0.5)
+        except aiohttp.ClientError as e:
+            print(f"[NET] chat={chat_id} draft attempt={attempt+1}: {e}")
+            await asyncio.sleep(0.5)
+    print(f"[FAIL] chat={chat_id} draft gave up after 3 attempts")
+    return None
+
 
 
 async def send_message(session, chat_id, text):
-    async with session.post(f"{API}/sendMessage", json={
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-    }) as resp:
-        return await resp.json()
+    for attempt in range(3):
+        try:
+            async with session.post(f"{API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+            }, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                data = await resp.json()
+                if resp.status == 429:
+                    retry_after = data.get("parameters", {}).get("retry_after", 1)
+                    print(f"[429] chat={chat_id} msg retry_after={retry_after}s attempt={attempt+1}")
+                    await asyncio.sleep(retry_after)
+                    continue
+                if not data.get("ok"):
+                    print(f"[ERR] chat={chat_id} msg: {data}")
+                return data
+        except asyncio.TimeoutError:
+            print(f"[TIMEOUT] chat={chat_id} msg attempt={attempt+1}")
+            await asyncio.sleep(0.5)
+        except aiohttp.ClientError as e:
+            print(f"[NET] chat={chat_id} msg attempt={attempt+1}: {e}")
+            await asyncio.sleep(0.5)
+    print(f"[FAIL] chat={chat_id} msg gave up after 3 attempts")
+    return None
 
 
 async def play(session, chat_id):
     gen = id(asyncio.current_task())
     active[chat_id] = gen
     draft_id = random.randint(1, 2**31)
-    prev = None
-    start = asyncio.get_event_loop().time()
+    total = len(FRAMES)
 
     for i, frame in enumerate(FRAMES):
         if active.get(chat_id) != gen:
             return
-        if frame != prev:
-            await send_draft(session, chat_id, draft_id, f"<pre>{frame}</pre>")
-            prev = frame
-        target = start + (i + 1) * DELAY
-        now = asyncio.get_event_loop().time()
-        if target > now:
-            await asyncio.sleep(target - now)
+        progress = f"▶ {i+1}/{total}"
+        await send_draft(session, chat_id, draft_id, f"<pre>{frame}\n{progress}</pre>")
+        await asyncio.sleep(DELAY)
 
     if active.get(chat_id) == gen:
-        await send_message(session, chat_id, f"<pre>{FRAMES[-1]}</pre>\n\n🍎 Bad Apple!! — Fin")
+        await send_message(session, chat_id, "Bad Apple!! — Fin")
         active.pop(chat_id, None)
 
 
