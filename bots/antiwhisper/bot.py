@@ -1,5 +1,4 @@
 import os
-import html
 import json
 import uuid
 from typing import Dict
@@ -18,7 +17,6 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
-from telegram.constants import ParseMode
 
 # File to store messages
 MESSAGES_FILE = 'messages.json'
@@ -159,7 +157,13 @@ def main():
     global SECRET_MESSAGES
     SECRET_MESSAGES = load_messages()
 
-    application = ApplicationBuilder().token(token).build()
+    builder = ApplicationBuilder().token(token)
+
+    proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    if proxy:
+        builder = builder.proxy_url(proxy).get_updates_proxy_url(proxy)
+
+    application = builder.build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(InlineQueryHandler(inline_query_handler))
