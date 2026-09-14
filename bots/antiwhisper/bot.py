@@ -159,7 +159,13 @@ def main():
 
     builder = ApplicationBuilder().token(token)
 
-    proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    # api.telegram.org is HTTPS, so HTTPS_PROXY takes precedence.
+    proxy = (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("http_proxy")
+    )
     if proxy:
         builder = builder.proxy_url(proxy).get_updates_proxy_url(proxy)
 
